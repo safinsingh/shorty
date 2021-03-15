@@ -1,40 +1,31 @@
+use async_trait::async_trait;
+use once_cell::unsync::Lazy;
 use rocket::{
     http::Status,
     request::{self, FromRequest, Outcome, Request},
 };
-use std::env;
+use std::env::{self, VarError};
 
-pub struct ShortyToken(String);
+pub struct ShortyToken;
 
+#[async_trait]
 impl<'a, 'r> FromRequest<'a, 'r> for ShortyToken {
-    type Error = String;
+    type Error = &'r str;
 
-    fn from_request(req: &'a Request<'r>) -> request::Outcome<Self, Self::Error> {
-        let auth_header = match req.headers().get_one("Authorization") {
-            Some(x) => x,
-            None => {
-                return Outcome::Failure((Status::Unauthorized, String::from("Invalid API token.")))
-            }
-        };
+    async fn from_request(
+        req: &'a Request<'r>,
+    ) -> request::Outcome<Self, Self::Error> {
+        let token = req
+            .headers()
+            .get_one("Authorization")
+            .and_then(|h| h.strip_prefix("Bearer "));
+        let sys_token =
+            Lazy::<Result<String, VarError>>::new(|| env::var("TOKEN"));
 
-        let provided_token = match auth_header.strip_prefix("Bearer ") {
-            Some(x) => x,
-            None => {
-                return Outcome::Failure((Status::Unauthorized, String::from("Invalid API token.")))
-            }
-        };
-
-        let actual_token = match env::var("TOKEN") {
-            Ok(x) => x,
-            Err(_) => {
-                return Outcome::Failure((Status::Unauthorized, String::from("Invalid API token.")))
-            }
-        };
-
-        if provided_token != actual_token {
-            return Outcome::Failure((Status::Unauthorized, String::from("Invalid API token.")));
+        if token == sys_token.as_ref().ok().map(String::as_str) {
+            Outcome::Success(Self)
+        } else {
+            Outcome::Failure((Status::Unauthorized, "Invalid API token."))
         }
-
-        Outcome::Success(Self(String::from(provided_token)))
     }
 }

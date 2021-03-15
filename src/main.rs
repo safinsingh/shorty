@@ -1,67 +1,50 @@
-#![feature(proc_macro_hygiene, decl_macro)]
+#[macro_use]
+extern crate rocket;
 
-// 🏡 Local module imports
 mod api;
 mod attribution;
 mod auth;
 mod db;
 
-use attribution::Attribution;
-use db::ShortyDb;
-
-// 👽 External create imports
-#[macro_use]
-extern crate rocket;
-
+use self::{attribution::Attribution, db::ShortyDb};
+use anyhow::{Context, Result};
+use r2d2::Pool;
 use redis::Client;
 use rocket::{response::Redirect, State};
-use std::{env, sync::RwLock};
+use std::env;
 
-pub struct ShortyState {
-    db: RwLock<ShortyDb>,
-}
+type ShortyState<'r> = State<'r, ShortyDb>;
 
 #[get("/<name>")]
-fn link(state: State<ShortyState>, name: String) -> Option<Redirect> {
+async fn link<'r>(state: ShortyState<'r>, name: String) -> Option<Redirect> {
     state
-        .db
-        .write()
-        .unwrap()
-        .get_link(&name)
+        .get_link(name)
+        .await
         .map(|x| Redirect::temporary(x.url))
         .ok()
 }
 
 #[get("/")]
-fn index(state: State<ShortyState>) -> Option<Redirect> {
+async fn index<'r>(state: ShortyState<'r>) -> Option<Redirect> {
     state
-        .db
-        .write()
-        .unwrap()
-        .get_link(&String::from("root"))
+        .get_link(String::from("root"))
+        .await
         .map(|x| Redirect::temporary(x.url))
         .ok()
 }
 
-#[catch(404)]
-fn not_found() -> String {
-    String::from("404 not found")
-}
-
-fn main() {
-    // Make sure certain environment variables are set
-    env::var("DB_URL").expect("DB_URL environment variable not set");
-
-    let redis_client = Client::open(env::var("DB_URL").expect("Missing DB_URL env variable."))
-        .expect("Error connecting to Redis");
-    let db = ShortyDb::new(redis_client);
+#[tokio::main]
+async fn main() -> Result<()> {
+    let url =
+        env::var("DB_URL").context("DB_URL environment variable not set")?;
+    let manager = Client::open(url).context("Error connecting to Redis")?;
+    let pool = Pool::new(manager)?;
 
     rocket::ignite()
         .mount("/", routes![index, link, api::add_item, api::delete_item])
-        .register(catchers![not_found])
-        .manage(ShortyState {
-            db: RwLock::new(db),
-        })
+        .manage(ShortyDb::new(pool))
         .attach(Attribution)
-        .launch();
+        .launch()
+        .await
+        .map_err(Into::into)
 }

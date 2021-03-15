@@ -1,0 +1,6 @@
+max_width = 80
+imports_granularity = "Crate"
+match_arm_leading_pipes = "Preserve"
+fn_single_line = true
+wrap_comments = true
+tab_spaces = 4

@@ -1,9 +1,13 @@
-use rocket::{fairing::Fairing, fairing::Info, fairing::Kind, http::Header};
-
-use rocket::{Request, Response};
+use async_trait::async_trait;
+use rocket::{
+    fairing::{Fairing, Info, Kind},
+    http::Header,
+    Request, Response,
+};
 
 pub struct Attribution;
 
+#[async_trait]
 impl Fairing for Attribution {
     fn info(&self) -> Info {
         Info {
@@ -11,8 +15,13 @@ impl Fairing for Attribution {
             kind: Kind::Response,
         }
     }
-    fn on_response(&self, _: &Request, response: &mut Response) {
-        response.set_header(Header::new(
+
+    async fn on_response<'r>(
+        &self,
+        _req: &'r Request<'_>,
+        res: &mut Response<'r>,
+    ) {
+        res.set_header(Header::new(
             "X-Powered-By",
             "shorty (https://github.com/cjdenio/shorty)",
         ));
