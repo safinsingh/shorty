@@ -16,18 +16,12 @@ use std::env;
 type ShortyState<'r> = State<'r, ShortyDb>;
 
 #[get("/<name>")]
-async fn link<'r>(state: ShortyState<'r>, name: String) -> Option<Redirect> {
+async fn link<'r>(
+    state: ShortyState<'r>,
+    name: Option<String>,
+) -> Option<Redirect> {
     state
-        .get_link(name)
-        .await
-        .map(|x| Redirect::temporary(x.url))
-        .ok()
-}
-
-#[get("/")]
-async fn index<'r>(state: ShortyState<'r>) -> Option<Redirect> {
-    state
-        .get_link(String::from("root"))
+        .get_link(name.unwrap_or(String::from("root")))
         .await
         .map(|x| Redirect::temporary(x.url))
         .ok()
@@ -41,7 +35,7 @@ async fn main() -> Result<()> {
     let pool = Pool::new(manager)?;
 
     rocket::ignite()
-        .mount("/", routes![index, link, api::add_item, api::delete_item])
+        .mount("/", routes![link, api::add_item, api::delete_item])
         .manage(ShortyDb::new(pool))
         .attach(Attribution)
         .launch()

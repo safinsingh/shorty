@@ -15,8 +15,8 @@ pub struct ApiResult<T> {
     err: Option<String>,
 }
 
-impl<T: Serialize + Default> ApiResult<T> {
-    fn from_result(result: Result<T>) -> ApiResult<T> {
+impl<T: Serialize + Default> From<Result<T>> for ApiResult<T> {
+    fn from(result: Result<T>) -> Self {
         if let Ok(r) = result {
             Self {
                 ok: true,
@@ -37,7 +37,7 @@ pub async fn add_item<'r>(
     link: Form<LinkRecord>,
 ) -> Json<ApiResult<Link>> {
     let link = state.add_link(name, link.into_inner()).await;
-    Json(ApiResult::from_result(link))
+    Json(link.into())
 }
 
 #[delete("/api/link/<name>")]
@@ -47,5 +47,5 @@ pub async fn delete_item<'r>(
     name: String,
 ) -> Json<ApiResult<String>> {
     let link = state.del_link(name).await;
-    Json(ApiResult::from_result(link))
+    Json(link.into())
 }

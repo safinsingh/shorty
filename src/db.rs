@@ -13,7 +13,6 @@ pub struct Link {
 #[derive(Serialize, Deserialize, Debug, FromForm, Default)]
 pub struct LinkRecord {
     pub url: String,
-    pub public: Option<bool>,
 }
 
 pub struct ShortyDb {
@@ -29,32 +28,23 @@ impl ShortyDb {
         link: LinkRecord,
     ) -> Result<Link> {
         let mut conn = self.pool.get()?;
-
         let link_json = serde_json::to_string(&link)?;
-        conn.set(format!("link:{}", name), link_json)?;
 
+        conn.set(format!("link:{}", name), link_json)?;
         Ok(Link { name, link })
     }
 
     pub async fn del_link(&self, name: String) -> Result<String> {
         let mut conn = self.pool.get()?;
-        conn.get(format!("link:{}", name))?;
+        conn.del(format!("link:{}", name))?;
+
         Ok(name)
     }
 
     pub async fn get_link(&self, name: String) -> Result<LinkRecord> {
         let mut conn = self.pool.get()?;
-        let link_json: String = conn.get(format!("link:{}", name))?;
+        let link = conn.get::<_, String>(format!("link:{}", name))?;
 
-        // Fall back to URL if not JSON-parsable
-        let link = match serde_json::from_str::<LinkRecord>(&link_json) {
-            Ok(x) => x,
-            Err(_) => LinkRecord {
-                url: link_json,
-                public: None,
-            },
-        };
-
-        Ok(link)
+        serde_json::from_str::<LinkRecord>(&link).map_err(Into::into)
     }
 }
